@@ -9,6 +9,7 @@ using GalaSoft.MvvmLight.CommandWpf;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -28,7 +29,7 @@ namespace CSVImporter.ViewModel
             traceProvider = new TraceProvider();
 
             actorSystem = ActorSystem.Create("trace-data-system");
-            var props = Props.Create(() => new TraceDataPersistenceActor(this)).WithRouter(new RoundRobinPool(10));
+            var props = Props.Create(() => new TraceDataPersistenceActor(this)).WithRouter(new SmallestMailboxPool(1));
             var actor = actorSystem.ActorOf(props, "traceData");
             traceDataActorPath = actor.Path.ToStringWithAddress();
         }
@@ -137,9 +138,7 @@ namespace CSVImporter.ViewModel
 
                                 foreach (var fileName in dialog.FileNames)
                                 {
-                                    //var task = Task.Run(() => ReadFile(fileName));
                                     ThreadPool.QueueUserWorkItem(async o => await ReadFile(fileName));
-                                    //task.Wait();
                                 }
                             }
                             else
@@ -159,6 +158,7 @@ namespace CSVImporter.ViewModel
             StreamReader file = new StreamReader(filePath);
             var fileData = new FileData { FileName = filePath, ImportedDate = DateTime.Now };
             string[] traceNames = null;
+            string[] traceDates = null;
             int recordIndex = 0;
 
             while ((line = file.ReadLine()) != null)
@@ -186,22 +186,32 @@ namespace CSVImporter.ViewModel
                     SaveBlockData(line, fileData.FileDataId, traceNames);
                     SizeImported += lineSize;
                 }
+                else if(index == 5)
+                {
+                    SaveTraceDate(line, fileData.FileDataId, traceNames);
+                    SizeImported += lineSize;
+                }
+                else if (index == 6)
+                {
+                    //SaveTraceDateAndTime(line, fileData.FileDataId, traceNames, traceDates);
+                    //SaveTraceTime(line, fileData.FileDataId, traceNames);
+                    SizeImported += lineSize;
+                }
                 else if(index > 10)
                 {
                     recordIndex++;
                     SaveTraceData(line, fileData.FileDataId, recordIndex, traceNames, lineSize);
                 }
                 
-                if (counter < 20)
-                    Message = $"{Message}{Environment.NewLine}{line}";
+                //if (counter < 20)
+                //    Message = $"{Message}{Environment.NewLine}{line}";
 
-                counter++;
+                //counter++;
                 
-                
-                if (counter == 10000)
-                {
-                    counter = 0;
-                }
+                //if (counter == 10000)
+                //{
+                //    counter = 0;
+                //}
             }
         }
 
@@ -221,6 +231,20 @@ namespace CSVImporter.ViewModel
             if (elements[0].Trim('"') == "BlockNumber")
                 blockNumber = elements[1].Trim('"');
             return int.Parse(blockNumber);
+        }
+
+        private string[] ParseTraceDates(string line)
+        {
+            List<string> traceDates = new List<string>();
+            var elements = line.Split(',');
+            if (elements[0].Trim('"') == "Date")
+            {
+                for (int i = 0; i < elements.Length; i++)
+                {
+                    traceDates.Add(elements[i].Trim('"'));
+                }
+            }
+            return traceDates.ToArray();
         }
 
         private string[] ParseTraceNames(string line)
@@ -257,6 +281,67 @@ namespace CSVImporter.ViewModel
             }
         }
 
+        private void SaveTraceDate(string line, int fileDataId, string[] traceNames)
+        {
+            var elements = line.Split(',');
+            if (elements[0].Trim('"') == "Date")
+            {
+                for (int i = 1; i < elements.Length; i++)
+                {
+                    if (elements[i].Trim('"') != "")
+                    {
+                        traceProvider.SaveTraceDateAsync(new TraceDate
+                        {
+                            FileDataId = fileDataId,
+                            TraceName = traceNames[i],
+                            FileTraceDate = DateTime.ParseExact(elements[i], "yyyy/MM/dd", CultureInfo.InvariantCulture)
+                        });
+                    }
+                }
+            }
+        }
+
+        private void SaveTraceDateAndTime(string line, int fileDataId, string[] traceNames, string[] traceDates)
+        {
+            var elements = line.Split(',');
+            if (elements[0].Trim('"') == "Time")
+            {
+                for (int i = 1; i < elements.Length; i++)
+                {
+                    string fullDate = $"{traceDates[i]} {elements[i]}";
+                    if (elements[i].Trim('"') != "")
+                    {
+                        traceProvider.SaveTraceDateAsync(new TraceDate
+                        {
+                            FileDataId = fileDataId,
+                            TraceName = traceNames[i],
+                            FileTraceDate = DateTime.ParseExact(fullDate, "yyyy/MM/dd HH:mm:ss", new CultureInfo("en-US"))
+                        });
+                    }
+                }
+            }
+        }
+
+        private void SaveTraceTime(string line, int fileDataId, string[] traceNames)
+        {
+            var elements = line.Split(',');
+            if (elements[0].Trim('"') == "Time")
+            {
+                for (int i = 1; i < elements.Length; i++)
+                {
+                    if (elements[i].Trim('"') != "")
+                    {
+                        traceProvider.SaveTraceTimeAsync(new TraceTime
+                        {
+                            FileDataId = fileDataId,
+                            TraceName = traceNames[i],
+                            FileTraceTime = DateTime.ParseExact(elements[i], "HH:mm:ss", new CultureInfo("en-US"))
+                        });
+                    }
+                }
+            }
+        }
+
         private void SaveTraceData(string line, int fileDataId, int recordIndex, string[] traceNames, int lineSize)
         {
             var elements = line.Split(',');
@@ -274,7 +359,15 @@ namespace CSVImporter.ViewModel
                             TraceValue = elements[i]
                         };
                         actorSystem.ActorSelection(traceDataActorPath).Tell(new SaveTraceCommand { Size = lineSize, TraceData = trace });
-                        //traceProvider.SaveTraceDataAsync(trace);
+                        //try
+                        //{
+                        //    traceProvider.SaveTraceDataAsync(trace);
+                        //    UpdateProgressCounter(lineSize);
+                        //}
+                        //catch(Exception ex)
+                        //{
+                        //    UpdateErrorMessage(ex.Message);
+                        //}
                     }
                 }
             }

@@ -30,7 +30,7 @@ namespace CSVImporter.Actor
                 }
                 catch (Exception ex)
                 {
-                    progressUpdater.UpdateErrorMessage(ex.ToString());
+                    progressUpdater.UpdateErrorMessage(ex.Message);
                 }
             });
         }

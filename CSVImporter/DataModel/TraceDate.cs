@@ -12,7 +12,7 @@ namespace CSVImporter.DataModel
 
         public int FileDataId { get; set; }
 
-        public int TraceName { get; set; }
+        public string TraceName { get; set; }
 
         public DateTime FileTraceDate { get; set; }
     }

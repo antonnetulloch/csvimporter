@@ -6,14 +6,14 @@ using System.Threading.Tasks;
 
 namespace CSVImporter.DataModel
 {
-    public class TraceTime
+    public class HResolutionData
     {
-        public int TraceTimeId { get; set; }
+        public int HResolutionDataId { get; set; }
 
         public int FileDataId { get; set; }
 
         public string TraceName { get; set; }
 
-        public DateTime FileTraceTime { get; set; }
+        public string HResolution { get; set; }
     }
 }

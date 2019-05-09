@@ -117,9 +117,13 @@
     <Compile Include="Actor\TraceDataPersistenceActor.cs" />
     <Compile Include="DataModel\BlockData.cs" />
     <Compile Include="DataModel\FileData.cs" />
+    <Compile Include="DataModel\HOffsetData.cs" />
+    <Compile Include="DataModel\HResolutionData.cs" />
+    <Compile Include="DataModel\HUnitData.cs" />
     <Compile Include="DataModel\TraceData.cs" />
     <Compile Include="DataModel\TraceDate.cs" />
     <Compile Include="DataModel\TraceTime.cs" />
+    <Compile Include="DataModel\VUnitData.cs" />
     <Compile Include="DataProvider\ITraceProvider.cs" />
     <Compile Include="DataProvider\TraceProvider.cs" />
     <Compile Include="IUpdateProgress.cs" />

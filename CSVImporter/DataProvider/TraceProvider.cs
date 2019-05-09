@@ -13,6 +13,13 @@ namespace CSVImporter.DataProvider
 {
     public class TraceProvider : ITraceProvider
     {
+        private IDbConnection connection;
+
+        public TraceProvider()
+        {
+            connection = new NpgsqlConnection(GetConnectionString());
+        }
+
         public async Task<BlockData> SaveBlockDataAsync(BlockData block)
         {
             using (IDbConnection connection = new NpgsqlConnection(GetConnectionString()))
@@ -44,13 +51,13 @@ namespace CSVImporter.DataProvider
             using (IDbConnection connection = new NpgsqlConnection(GetConnectionString()))
             {
                 var sql = @"INSERT INTO tracedata(filedataid, recordid, tracename, tracevalue)
-                        VALUES(@FileDataId, @RecordId, @TraceName, @TraceValue)
-                        RETURNING tracedataid";
+                    VALUES(@FileDataId, @RecordId, @TraceName, @TraceValue)
+                    RETURNING tracedataid";
 
                 traceData.TraceDataId = await connection.ExecuteScalarAsync<int>(sql, traceData);
+
                 return traceData;
             }
-            
         }
 
         public async Task<TraceDate> SaveTraceDateAsync(TraceDate traceDate)
@@ -62,9 +69,6 @@ namespace CSVImporter.DataProvider
                             RETURNING tracedateid;";
 
                 traceDate.TraceDateId = await connection.ExecuteScalarAsync<int>(sql, traceDate);
-
-                connection.Close();
-                connection.Dispose();
 
                 return traceDate;
             }
@@ -80,6 +84,19 @@ namespace CSVImporter.DataProvider
 
                 traceTime.TraceTimeId = await connection.ExecuteScalarAsync<int>(sql, traceTime);
                 return traceTime;
+            }
+        }
+
+        public async Task<VUnitData> SaveVUnitDataAsync(VUnitData vunit)
+        {
+            using (IDbConnection connection = new NpgsqlConnection(GetConnectionString()))
+            {
+                var sql = @"INSERT INTO vunitdata(filedataid, tracename, vunit)
+                            VALUES(@FileDataId, @TraceName, @VUnit);
+                            RETURNING tracetimeid;";
+
+                vunit.VUnitDataId = await connection.ExecuteScalarAsync<int>(sql, vunit);
+                return vunit;
             }
         }
 
