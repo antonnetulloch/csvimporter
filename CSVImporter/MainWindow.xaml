@@ -12,18 +12,30 @@
     </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="3*" />
+            <RowDefinition Height="2*" />
             <RowDefinition Height="*"/>
+            <RowDefinition Height="2*"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <DockPanel Grid.Row="0" Margin="10">
             <WrapPanel HorizontalAlignment="Center" DockPanel.Dock="Top" Margin="10">
                 <Button Name="btnOpenFile" Command="{Binding ImportCommand}">Import File(s)</Button>
             </WrapPanel>
-            <TextBox Name="txtEditor" Text="{Binding Message}"/>
+            <TextBox Name="txtEditor" 
+                     Text="{Binding Message}"
+                     HorizontalScrollBarVisibility="Visible"
+                     VerticalScrollBarVisibility="Visible" 
+                     TextWrapping="NoWrap"/>
         </DockPanel>
-        <TextBox Grid.Row="1" Name="txtImportedSize" Text="{Binding SizeImported}"/>
-        <ProgressBar Grid.Row="2" x:Name="prgFileImport" 
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Stretch">
+            <TextBox Name="txtImportedSize" MinWidth="200" HorizontalAlignment="Stretch" Text="{Binding SizeImported}" />
+            <TextBox Text="{Binding FailureCount}" MinWidth="200" HorizontalAlignment="Stretch" Foreground="Red" />
+        </StackPanel>
+        <TextBox Grid.Row="2" Text="{Binding ErrorMessage}"
+                 HorizontalScrollBarVisibility="Visible"
+                 VerticalScrollBarVisibility="Visible" 
+                 MinWidth="200" />
+        <ProgressBar Grid.Row="3" x:Name="prgFileImport" 
                      Visibility="{Binding ProgressBarIsVisible, Converter={StaticResource BooleanToVisibilityConverter}}" 
                      Minimum="0"
                      Maximum="{Binding TotalToImport}"

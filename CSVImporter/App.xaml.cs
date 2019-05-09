@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Serilog;
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
@@ -13,5 +14,16 @@ namespace CSVImporter
     /// </summary>
     public partial class App : Application
     {
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+
+            var logger = new LoggerConfiguration()
+            .WriteTo.File("actorLog.txt", rollingInterval: RollingInterval.Hour)
+            .MinimumLevel.Information()
+            .CreateLogger();
+
+            Serilog.Log.Logger = logger;
+        }
     }
 }
