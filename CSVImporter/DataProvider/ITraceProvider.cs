@@ -14,5 +14,8 @@ namespace CSVImporter.DataProvider
         Task<TraceDate> SaveTraceDateAsync(TraceDate traceDate);
         Task<TraceTime> SaveTraceTimeAsync(TraceTime traceTime);
         Task<TraceData> SaveTraceDataAsync(TraceData traceData);
+        Task SaveBatchTraceDataAsync(List<TraceData> traceData);
+        void SaveBatchTraceData(List<TraceData> batch);
+        Task<TraceHeader> SaveTraceHeaderAsync(TraceHeader header);
     }
 }

@@ -14,24 +14,49 @@ namespace CSVImporter.Actor
     {
         private ITraceProvider traceProvider;
         private IUpdateProgress progressUpdater;
+        private int totalSize;
+        private List<TraceData> traces;
 
         public TraceDataPersistenceActor(IUpdateProgress updater)
         {
             progressUpdater = updater;
             traceProvider = new TraceProvider();
+            traces = new List<TraceData>();
 
             Receive<SaveTraceCommand>(async trace =>
             {
+                int batchTotal = 100;
                 try
                 {
-                    var traceData = await traceProvider.SaveTraceDataAsync(trace.TraceData);
-                    if (traceData.TraceDataId > 0)
-                        progressUpdater.UpdateProgressCounter(trace.Size);
+                    if(traces.Count < batchTotal)
+                    {
+                        traces.Add(trace.TraceData);
+                        totalSize += trace.Size;
+                    }
+                    else
+                    {
+                        await traceProvider.SaveBatchTraceDataAsync(traces);
+                        //traceProvider.SaveBatchTraceData(traces);
+                        progressUpdater.UpdateProgressCounter(totalSize, batchTotal);
+                        traces = new List<TraceData>();
+                        totalSize = 0;
+                    }
+                    
                 }
                 catch (Exception ex)
                 {
+                    traces = new List<TraceData>();
+                    totalSize = 0;
                     progressUpdater.UpdateErrorMessage(ex.Message);
                 }
+            });
+
+            Receive<CompleteProcessingCommand>(async (c) =>
+            {
+                await traceProvider.SaveBatchTraceDataAsync(traces);
+                progressUpdater.UpdateProgressCounter(totalSize, traces.Count());
+                traces = new List<TraceData>();
+                totalSize = 0;
             });
         }
     }

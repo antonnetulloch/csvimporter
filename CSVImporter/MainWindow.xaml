@@ -28,8 +28,9 @@
                      TextWrapping="NoWrap"/>
         </DockPanel>
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Stretch">
-            <TextBox Name="txtImportedSize" MinWidth="200" HorizontalAlignment="Stretch" Text="{Binding SizeImported}" />
+            <TextBox Name="txtImportedSize" MinWidth="200" HorizontalAlignment="Stretch" Text="{Binding TraceEntriesProcessed}" />
             <TextBox Text="{Binding FailureCount}" MinWidth="200" HorizontalAlignment="Stretch" Foreground="Red" />
+            <TextBox MinWidth="200" HorizontalAlignment="Stretch" Text="{Binding LinesProcessed}" />
         </StackPanel>
         <TextBox Grid.Row="2" Text="{Binding ErrorMessage}"
                  HorizontalScrollBarVisibility="Visible"
@@ -38,7 +39,7 @@
         <ProgressBar Grid.Row="3" x:Name="prgFileImport" 
                      Visibility="{Binding ProgressBarIsVisible, Converter={StaticResource BooleanToVisibilityConverter}}" 
                      Minimum="0"
-                     Maximum="{Binding TotalToImport}"
-                     Value="{Binding SizeImported}"/>
+                     Maximum="{Binding TotalLines}"
+                     Value="{Binding LinesProcessed}"/>
     </Grid>
 </Window>

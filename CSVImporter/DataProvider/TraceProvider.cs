@@ -13,11 +13,85 @@ namespace CSVImporter.DataProvider
 {
     public class TraceProvider : ITraceProvider
     {
-        private IDbConnection connection;
+        private NpgsqlConnection connection;
 
         public TraceProvider()
         {
             connection = new NpgsqlConnection(GetConnectionString());
+        }
+
+        public async Task SaveBatchTraceDataAsync(List<TraceData> batch)
+        {
+            var sb = new StringBuilder();
+            using (var conn = new NpgsqlConnection(GetConnectionString()))
+            {
+                conn.Open();
+                using (var cmd = conn.CreateCommand())
+                {
+                    int paramIndex = 0;
+                    for (int i = 0; i < batch.Count; i++)
+                    {
+                        sb.Append($@"INSERT INTO tracedata(traceheaderid, recordid, tracevalue)
+                        VALUES(@TraceHeaderId{i}, @RecordId{i}, @TraceValue{i});");
+                        cmd.Parameters.Add($"TraceHeaderId{i}", NpgsqlTypes.NpgsqlDbType.Bigint);
+                        cmd.Parameters[paramIndex].Value = batch[i].TraceHeaderId;
+                        paramIndex++;
+                        cmd.Parameters.Add($"RecordId{i}", NpgsqlTypes.NpgsqlDbType.Bigint);
+                        cmd.Parameters[paramIndex].Value = batch[i].RecordId;
+                        paramIndex++;
+                        cmd.Parameters.Add($"TraceValue{i}", NpgsqlTypes.NpgsqlDbType.Numeric);
+                        if (batch[i].TraceValue != null)
+                            cmd.Parameters[paramIndex].Value = batch[i].TraceValue;
+                        else
+                            cmd.Parameters[paramIndex].Value = DBNull.Value;
+                        paramIndex++;
+                        //cmd.Parameters.AddWithValue($"TraceHeaderId{i}", batch[i].TraceHeaderId);
+                        //cmd.Parameters.AddWithValue($"RecordId{i}", batch[i].RecordId);
+                        //cmd.Parameters.AddWithValue($"TraceValue{i}", batch[i].TraceValue);
+                    }
+                    cmd.CommandText = sb.ToString();
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            return;
+        }
+
+        public void SaveBatchTraceData(List<TraceData> batch)
+        {
+            var sb = new StringBuilder();
+            using (var conn = new NpgsqlConnection(GetConnectionString()))
+            {
+                conn.Open();
+                using (var cmd = conn.CreateCommand())
+                {
+                    int paramIndex = 0;
+                    for (int i = 0; i < batch.Count; i++)
+                    {
+                        sb.Append($@"INSERT INTO tracedata(traceheaderid, recordid, tracevalue)
+                        VALUES(@TraceHeaderId{i}, @RecordId{i}, @TraceValue{i});");
+                        cmd.Parameters.Add($"TraceHeaderId{i}", NpgsqlTypes.NpgsqlDbType.Bigint);
+                        cmd.Parameters[paramIndex].Value = batch[i].TraceHeaderId;
+                        paramIndex++;
+                        cmd.Parameters.Add($"RecordId{i}", NpgsqlTypes.NpgsqlDbType.Bigint);
+                        cmd.Parameters[paramIndex].Value = batch[i].RecordId;
+                        paramIndex++;
+                        cmd.Parameters.Add($"TraceValue{i}", NpgsqlTypes.NpgsqlDbType.Numeric);
+                        if (batch[i].TraceValue != null)
+                            cmd.Parameters[paramIndex].Value = batch[i].TraceValue;
+                        else
+                            cmd.Parameters[paramIndex].Value = DBNull.Value;
+                        paramIndex++;
+                        //cmd.Parameters.AddWithValue($"TraceHeaderId{i}", batch[i].TraceHeaderId);
+                        //cmd.Parameters.AddWithValue($"RecordId{i}", batch[i].RecordId);
+                        //cmd.Parameters.AddWithValue($"TraceValue{i}", batch[i].TraceValue);
+                    }
+                    cmd.CommandText = sb.ToString();
+                    cmd.ExecuteNonQuery();
+                }
+            }
+
+            return;
         }
 
         public async Task<BlockData> SaveBlockDataAsync(BlockData block)
@@ -50,8 +124,8 @@ namespace CSVImporter.DataProvider
         {
             using (IDbConnection connection = new NpgsqlConnection(GetConnectionString()))
             {
-                var sql = @"INSERT INTO tracedata(filedataid, recordid, tracename, tracevalue)
-                    VALUES(@FileDataId, @RecordId, @TraceName, @TraceValue)
+                var sql = @"INSERT INTO tracedata(traceheaderid, recordid, tracevalue)
+                    VALUES(@TraceHeaderId, @RecordId, @TraceValue)
                     RETURNING tracedataid";
 
                 traceData.TraceDataId = await connection.ExecuteScalarAsync<int>(sql, traceData);
@@ -71,6 +145,20 @@ namespace CSVImporter.DataProvider
                 traceDate.TraceDateId = await connection.ExecuteScalarAsync<int>(sql, traceDate);
 
                 return traceDate;
+            }
+        }
+
+        public async Task<TraceHeader> SaveTraceHeaderAsync(TraceHeader header)
+        {
+            using (IDbConnection connection = new NpgsqlConnection(GetConnectionString()))
+            {
+                var sql = @"INSERT INTO traceheader(filedataid, tracename, blocksize, tracedate, vunit, hresolution, hoffset, hunit)
+                            VALUES(@FileDataId, @TraceName, @BlockSize, @TraceDate, @VUnit, @HResolution, @HOffSet, @HUnit)
+                            RETURNING traceheaderid;";
+
+                header.TraceHeaderId = await connection.ExecuteScalarAsync<int>(sql, header);
+
+                return header;
             }
         }
 

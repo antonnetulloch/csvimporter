@@ -4,6 +4,7 @@ using CSVImporter.Actor;
 using CSVImporter.DataModel;
 using CSVImporter.DataProvider;
 using CSVImporter.Message;
+using CSVImporter.Utility;
 using GalaSoft.MvvmLight;
 using GalaSoft.MvvmLight.CommandWpf;
 using Microsoft.Win32;
@@ -14,6 +15,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace CSVImporter.ViewModel
 {
@@ -21,17 +23,23 @@ namespace CSVImporter.ViewModel
     {
         private ActorSystem actorSystem;
         private string traceDataActorPath;
+        private string parserActorPath;
+        private HeaderDataParser parser;
         public ITraceProvider traceProvider { get; set; }
 
         public MainViewModel()
         {
             ProgressBarIsVisible = false;
             traceProvider = new TraceProvider();
+            parser = new HeaderDataParser();
 
             actorSystem = ActorSystem.Create("trace-data-system");
             var props = Props.Create(() => new TraceDataPersistenceActor(this)).WithRouter(new SmallestMailboxPool(1));
             var actor = actorSystem.ActorOf(props, "traceData");
             traceDataActorPath = actor.Path.ToStringWithAddress();
+            var parserProps = Props.Create(() => new TraceDataParserActor()).WithRouter(new SmallestMailboxPool(10));
+            var parserActor = actorSystem.ActorOf(parserProps, "parseTraceData");
+            parserActorPath = parserActor.Path.ToStringWithAddress();
         }
 
         private RelayCommand importCommand;
@@ -71,6 +79,55 @@ namespace CSVImporter.ViewModel
                 RaisePropertyChanged(nameof(SizeImported));
             }
         }
+
+        private long totalLines;
+
+        public long TotalLines
+        {
+            get { return totalLines; }
+            set
+            {
+                totalLines = value;
+                RaisePropertyChanged(nameof(TotalLines));
+            }
+        }
+
+        private long linesProcessed;
+
+        public long LinesProcessed
+        {
+            get { return linesProcessed; }
+            set
+            {
+                linesProcessed = value;
+                RaisePropertyChanged(nameof(LinesProcessed));
+            }
+        }
+
+        private long totalTraceEntries;
+
+        public long TotalTraceEntries
+        {
+            get { return totalTraceEntries; }
+            set
+            {
+                totalTraceEntries = value;
+                RaisePropertyChanged(nameof(TotalTraceEntries));
+            }
+        }
+
+        private long traceEntriesProcessed;
+
+        public long TraceEntriesProcessed
+        {
+            get { return traceEntriesProcessed; }
+            set
+            {
+                traceEntriesProcessed = value;
+                RaisePropertyChanged(nameof(TraceEntriesProcessed));
+            }
+        }
+
 
         private string message;
 
@@ -124,15 +181,21 @@ namespace CSVImporter.ViewModel
                             if (result.HasValue && result.Value)
                             {
                                 long total = 0;
+                                long linesSum = 0;
                                 var sb = new StringBuilder();
                                 foreach (var fileName in dialog.FileNames)
                                 {
                                     var size = new FileInfo(fileName).Length;
                                     total += size;
                                     sb.AppendLine($"{fileName} - {size} bytes;");
+
+                                    var lines = File.ReadLines(fileName).LongCount();
+                                    sb.AppendLine($"{fileName} - {lines};");
+                                    linesSum += lines;
                                 }
                                 SizeImported = 0;
                                 TotalToImport = total;
+                                TotalLines = linesSum;
 
                                 Message = sb.ToString();
 
@@ -155,110 +218,87 @@ namespace CSVImporter.ViewModel
             int index = 0;
             long counter = 0;
             string line;
-            StreamReader file = new StreamReader(filePath);
+            
             var fileData = new FileData { FileName = filePath, ImportedDate = DateTime.Now };
-            string[] traceNames = null;
-            string[] traceDates = null;
+            List<string> traceNames = null;
+            List<DateTime> traceDates = null;
+            List<int> blockSizes = null;
+            List<string> vUnits = null;
+            List<decimal> hResolutions = null;
+            List<decimal> hOffsets = null;
+            List<string> hUnits = null;
+            List<long> traceHeaderIds = new List<long>();
             int recordIndex = 0;
 
-            while ((line = file.ReadLine()) != null)
+            var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+            using (StreamReader file = new StreamReader(fileStream))
             {
-                var lineSize = Encoding.ASCII.GetByteCount(line);
-                if (line.Trim() != "") index++;
-                if (index == 1)
+                while ((line = file.ReadLine()) != null)
                 {
-                    fileData.Model = ParseModel(line);
-                    SizeImported += lineSize;
-                }
-                else if (index == 2)
-                {
-                    fileData.BlockNumber = ParseBlockNumber(line);
-                    await traceProvider.SaveFileDataAsync(fileData);
-                    SizeImported += lineSize;
-                }
-                else if(index == 3)
-                {
-                    traceNames = ParseTraceNames(line);
-                    SizeImported += lineSize;
-                }
-                else if(index == 4)
-                {
-                    SaveBlockData(line, fileData.FileDataId, traceNames);
-                    SizeImported += lineSize;
-                }
-                else if(index == 5)
-                {
-                    SaveTraceDate(line, fileData.FileDataId, traceNames);
-                    SizeImported += lineSize;
-                }
-                else if (index == 6)
-                {
-                    //SaveTraceDateAndTime(line, fileData.FileDataId, traceNames, traceDates);
-                    //SaveTraceTime(line, fileData.FileDataId, traceNames);
-                    SizeImported += lineSize;
-                }
-                else if(index > 10)
-                {
-                    recordIndex++;
-                    SaveTraceData(line, fileData.FileDataId, recordIndex, traceNames, lineSize);
-                }
-                
-                //if (counter < 20)
-                //    Message = $"{Message}{Environment.NewLine}{line}";
+                    var lineSize = Encoding.ASCII.GetByteCount(line);
+                    if (line.Trim() != "") index++;
+                    switch (index)
+                    {
+                        case 1:
+                            fileData.Model = parser.ParseModel(line);
+                            SizeImported += lineSize;
+                            break;
+                        case 2:
+                            fileData.BlockNumber = parser.ParseBlockNumber(line);
+                            await traceProvider.SaveFileDataAsync(fileData);
+                            SizeImported += lineSize;
+                            break;
+                        case 3:
+                            traceNames = parser.ParseTraceNames(line);
+                            if (TotalTraceEntries <= TotalLines)
+                            {
+                                TotalTraceEntries = TotalLines * traceNames.Count();
+                                Message = $"{Message}{Environment.NewLine}Total Trace Entries: {TotalTraceEntries}";
+                            }
+                            SizeImported += lineSize;
+                            break;
+                        case 4:
+                            blockSizes = parser.ParseBlockSizes(line);
+                            SizeImported += lineSize;
+                            break;
+                        case 5:
+                            traceDates = parser.ParseTraceDates(line);
+                            SizeImported += lineSize;
+                            break;
+                        case 6:
+                            //SaveTraceDateAndTime(line, fileData.FileDataId, traceNames, traceDates);
+                            //SaveTraceTime(line, fileData.FileDataId, traceNames);
+                            SizeImported += lineSize;
+                            break;
+                        case 7:
+                            vUnits = parser.ParseVUnits(line);
+                            SizeImported += lineSize;
+                            break;
+                        case 8:
+                            hResolutions = parser.ParseHResolution(line);
+                            SizeImported += lineSize;
+                            break;
+                        case 9:
+                            hOffsets = parser.ParseHOffset(line);
+                            SizeImported += lineSize;
+                            break;
+                        case 10:
+                            hUnits = parser.ParseHUnits(line);
+                            traceHeaderIds = await SaveTraceHeaderAsync(fileData.FileDataId, traceNames, blockSizes, traceDates, vUnits,
+                                hResolutions, hOffsets, hUnits);
+                            SizeImported += lineSize;
+                            break;
+                        default:
+                            recordIndex++;
+                            SaveTraceData(line, fileData.FileDataId, recordIndex, traceHeaderIds, lineSize);
+                            break;
+                    }
 
-                //counter++;
-                
-                //if (counter == 10000)
-                //{
-                //    counter = 0;
-                //}
+                    counter++;
+                    LinesProcessed++;
+                }
+                actorSystem.ActorSelection(traceDataActorPath).Tell(new CompleteProcessingCommand());
             }
-        }
-
-        private string ParseModel(string line)
-        {
-            var model = "";
-            var elements = line.Split(',');
-            if(elements[0].Trim('"') == "Model")
-                model = elements[1].Trim('"');
-            return model;
-        }
-
-        private int ParseBlockNumber(string line)
-        {
-            var blockNumber = "0";
-            var elements = line.Split(',');
-            if (elements[0].Trim('"') == "BlockNumber")
-                blockNumber = elements[1].Trim('"');
-            return int.Parse(blockNumber);
-        }
-
-        private string[] ParseTraceDates(string line)
-        {
-            List<string> traceDates = new List<string>();
-            var elements = line.Split(',');
-            if (elements[0].Trim('"') == "Date")
-            {
-                for (int i = 0; i < elements.Length; i++)
-                {
-                    traceDates.Add(elements[i].Trim('"'));
-                }
-            }
-            return traceDates.ToArray();
-        }
-
-        private string[] ParseTraceNames(string line)
-        {
-            List<string> traceNames = new List<string>();
-            var elements = line.Split(',');
-            if (elements[0].Trim('"') == "TraceName")
-            {
-                for (int i = 0; i < elements.Length; i++)
-                {
-                    traceNames.Add(elements[i].Trim('"'));
-                }
-            }
-            return traceNames.ToArray();
         }
 
         private void SaveBlockData(string line, int fileDataId, string[] traceNames)
@@ -342,40 +382,45 @@ namespace CSVImporter.ViewModel
             }
         }
 
-        private void SaveTraceData(string line, int fileDataId, int recordIndex, string[] traceNames, int lineSize)
+        private async Task<List<long>> SaveTraceHeaderAsync(int fileDataId, List<string> traceNames, List<int> blockSizes, List<DateTime> traceDates,
+            List<string> vUnits, List<decimal> hResolutions, List<decimal> hOffsets, List<string> hUnits)
         {
-            var elements = line.Split(',');
-            if (elements[0].Trim('"') == "")
+            List<long> ids = new List<long>();
+            for (int i = 0; i < traceNames.Count; i++)
             {
-                for (int i = 1; i < elements.Length; i++)
+                var header = await traceProvider.SaveTraceHeaderAsync(new TraceHeader
                 {
-                    if (elements[i].Trim('"') != "")
-                    {
-                        var trace = new TraceData
-                        {
-                            FileDataId = fileDataId,
-                            RecordId = recordIndex,
-                            TraceName = traceNames[i],
-                            TraceValue = elements[i]
-                        };
-                        actorSystem.ActorSelection(traceDataActorPath).Tell(new SaveTraceCommand { Size = lineSize, TraceData = trace });
-                        //try
-                        //{
-                        //    traceProvider.SaveTraceDataAsync(trace);
-                        //    UpdateProgressCounter(lineSize);
-                        //}
-                        //catch(Exception ex)
-                        //{
-                        //    UpdateErrorMessage(ex.Message);
-                        //}
-                    }
-                }
+                    FileDataId = fileDataId,
+                    TraceName = traceNames[i],
+                    BlockSize = blockSizes[i],
+                    TraceDate = traceDates[i],
+                    VUnit = vUnits[i],
+                    HResolution = hResolutions[i],
+                    HOffSet = hOffsets[i],
+                    HUnit = hUnits[i]
+                });
+                ids.Add(header.TraceHeaderId);
             }
+            return ids;
         }
 
-        public void UpdateProgressCounter(int processed)
+        private void SaveTraceData(string line, int fileDataId, int recordIndex, List<long> traceHeaderIds, int lineSize)
+        {
+            actorSystem.ActorSelection(parserActorPath).Tell(new ParseTraceDataCommand
+            {
+                Line = line,
+                RecordIndex = recordIndex,
+                TraceHeaderIds = traceHeaderIds,
+                LineSize = lineSize,
+                TraceDataActorPath = traceDataActorPath
+            });
+        }
+
+        public void UpdateProgressCounter(int processed, int batchTotal)
         {
             SizeImported += processed;
+            TraceEntriesProcessed += batchTotal;
+            //LinesProcessed = LinesProcessed + batchTotal;
         }
 
         public void UpdateErrorMessage(string error)

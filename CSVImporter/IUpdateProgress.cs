@@ -8,7 +8,7 @@ namespace CSVImporter
 {
     public interface IUpdateProgress
     {
-        void UpdateProgressCounter(int processed);
+        void UpdateProgressCounter(int processed, int count);
 
         void UpdateErrorMessage(string error);
     }

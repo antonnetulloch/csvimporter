@@ -9,9 +9,8 @@ namespace CSVImporter.DataModel
     public class TraceData
     {
         public long TraceDataId { get; set; }
-        public int FileDataId { get; set; }
+        public long TraceHeaderId { get; set; }
         public long RecordId { get; set; }
-        public string TraceName { get; set; }
-        public string TraceValue { get; set; }
+        public decimal? TraceValue { get; set; }
     }
 }
